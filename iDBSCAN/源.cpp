@@ -8,9 +8,12 @@
 #include <stack>
 #include <algorithm>
 #include <math.h>
+#include <Eigen/Eigen>
 
 //#define DEBUG
 //#define MULTI	//Won't process missing data
+
+#define M_PI 3.14159265358979323846
 
 #define pointSet std::vector<Point*>
 
@@ -26,6 +29,15 @@
 #define CLUSTER 2	//Number of original clusters / Number of label types
 
 #define K 4
+
+double foo(const Eigen::VectorXd &x, const Eigen::VectorXd &meanVec, const Eigen::MatrixXd &covMat)
+{
+	Eigen::MatrixXd pinv = covMat.completeOrthogonalDecomposition().pseudoInverse();
+	double det = covMat.determinant();
+	Eigen::VectorXd diff = x - meanVec;
+
+	return 1 / (std::pow((2 * M_PI), ATTRIBUTIONS / 2.0)*std::sqrt(det))*std::exp(-0.5*(diff.transpose())*pinv*diff);
+}
 
 class UnionFindSet {
 private:
@@ -288,44 +300,56 @@ public:
 		double min_p = 0;
 		Point *represent = NULL;
 		std::set<int> visited;
+		Eigen::VectorXd x(ATTRIBUTIONS);
+		Eigen::VectorXd mu(ATTRIBUTIONS);
+		Eigen::MatrixXd conv(ATTRIBUTIONS, ATTRIBUTIONS);
 		for (pointSet::iterator i = neighbors->begin(); i != neighbors->end(); ++i) {
 			if (visited.find(ufs->father((*i)->num)) == visited.end()) {
 				visited.insert(ufs->father((*i)->num));
 				int total = 0;
-				Point avg, vari;
+				//Point avg, vari;
 				for (int k = 0; k < ATTRIBUTIONS; ++k) {
-					avg.a[k] = (*i)->a[k];
+					mu(k) = (*i)->a[k];
 				}
 				for (pointSet::iterator j = i + 1; j != neighbors->end(); ++j) {
 					if (ufs->query((*i)->num, (*j)->num)) {
 						for (int k = 0; k < ATTRIBUTIONS; ++k) {
-							avg.a[k] += (*j)->a[k];
+							mu(k) += (*j)->a[k];
 						}
 						total = total + 1;
 					}
 				}
 				for (int k = 0; k < ATTRIBUTIONS; ++k) {
-					avg.a[k] /= total;
+					mu(k) /= total;
 				}
 				for (pointSet::iterator j = i + 1; j != neighbors->end(); ++j) {
 					if (ufs->query((*i)->num, (*j)->num)) {
-						for (int k = 0; k < ATTRIBUTIONS; ++k) {
-							vari.a[k] += ((*j)->a[k] - avg.a[k])*((*j)->a[k] - avg.a[k]);
+						for (int k1 = 0; k1 < ATTRIBUTIONS; ++k1) {
+							for (int k2 = 0; k2 < ATTRIBUTIONS; ++k2) {
+								conv(k1, k2) += ((*j)->a[k1] - mu(k1))*((*j)->a[k2] - mu(k2));
+								//vari.a[k] += ((*j)->a[k] - avg.a[k])*((*j)->a[k] - avg.a[k]);
+							}
 						}
 					}
 				}
-				for (int k = 0; k < ATTRIBUTIONS; ++k) {
-					vari.a[k] /= total;
-				}
-				double p = (double)total / neighbors->size();
-				for (int k = 0; k < ATTRIBUTIONS; ++k) {
-					if (point->a[k] < INFINITE - 1) {
-						p *= exp(-(point->a[k] - avg.a[k])*(point->a[k] - avg.a[k]) / (2 * vari.a[k])) / sqrt(vari.a[k]);
+				for (int k1 = 0; k1 < ATTRIBUTIONS; ++k1) {
+					for (int k2 = 0; k2 < ATTRIBUTIONS; ++k2) {
+						conv(k1, k2) /= total;
+						//vari.a[k] += ((*j)->a[k] - avg.a[k])*((*j)->a[k] - avg.a[k]);
 					}
 				}
+				for (int k = 0; k < ATTRIBUTIONS; ++k) {
+					if (point->a[k] < INFINITE - 1) {
+						x(k) = point->a[k];
+					}
+					else {
+						x(k) = mu(k);
+					}
+				}
+				double p = foo(x, mu, conv);
 				if (p > min_length) {
 					min_length = p;
-					min_p = avg.a[d];
+					min_p = mu(d);
 					represent = (*i);
 				}
 			}
@@ -569,9 +593,23 @@ double accuracy2(pointSet *set, UnionFindSet* ufs) {
 }
 
 int Point::Number = 0;
+
 int main(int argc, char* argv[])
 {
-	
+	/*
+	Eigen::VectorXd x(ATTRIBUTIONS);
+	Eigen::VectorXd mu(ATTRIBUTIONS);
+	Eigen::MatrixXd conv(ATTRIBUTIONS, ATTRIBUTIONS);
+
+	for (int i = 0; i < ATTRIBUTIONS; ++i) {
+		x(i) = 0;
+		mu(i) = 0;
+	}
+	for (int i = 0; i < ATTRIBUTIONS; ++i)
+		for (int j = 0; j < ATTRIBUTIONS; ++j)
+			conv(i, j) = i == j;
+	std::cout << foo(x, mu, conv) << std::endl;
+	*/
 	srand(1);
 	double E;
 	int N;
