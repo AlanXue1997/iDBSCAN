@@ -25,8 +25,8 @@
 #define MAX_CLUSTER 100
 #define INFINITE 10000
 
-#define ATTRIBUTIONS 3
-#define CLUSTER 2	//Number of original clusters / Number of label types
+#define ATTRIBUTIONS 4
+#define CLUSTER 3	//Number of original clusters / Number of label types
 
 #define K 4
 
@@ -292,12 +292,12 @@ public:
 		return set;
 	}
 
-	double predict(Point *point, double E, int d, UnionFindSet *ufs) {
+	Eigen::VectorXd predict(Point *point, double E, int d, UnionFindSet *ufs) {
 		this->E = E;
 		pointSet *neighbors = new pointSet();
 		findPredict(neighbors, root->r, point, d);
 		double min_length = -INFINITE;
-		double min_p = 0;
+		Eigen::VectorXd min_p(ATTRIBUTIONS);
 		Point *represent = NULL;
 		std::set<int> visited;
 		Eigen::VectorXd x(ATTRIBUTIONS);
@@ -349,7 +349,7 @@ public:
 				double p = foo(x, mu, conv);
 				if (p > min_length) {
 					min_length = p;
-					min_p = mu(d);
+					min_p = mu;
 					represent = (*i);
 				}
 			}
@@ -713,9 +713,10 @@ int main(int argc, char* argv[])
 	int counter = 0;
 	for (int k = 1; k <= ATTRIBUTIONS; ++k) {
 		for (pointSet::iterator p = incompleteSet[k]->begin(); p != incompleteSet[k]->end(); p++) {
+			Eigen::VectorXd predict = tree.predict((*p), E, 1, ufs);
 			for (int i = 0; i < ATTRIBUTIONS; ++i) {
 				if ((*p)->a[i] == INFINITE) {
-					(*p)->a[i] = tree.predict((*p), E, i, ufs);
+					(*p)->a[i] = predict[i];
 					//std::cout << '[' << ++counter << '/' << sum << "] "<<(*p)->a[i] << std::endl;
 				}
 			}
